@@ -45,8 +45,8 @@ def setup_clients():
         raise ValueError("GEMINI_API_KEY environment variable is missing!")
     
     genai.configure(api_key=gemini_key)
-    # Using gemini-1.5-flash as it is free, fast, and highly capable
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # Using gemini-3.1-flash as requested
+    model = genai.GenerativeModel('gemini-3.1-flash')
 
     return db, model
 
