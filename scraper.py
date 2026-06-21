@@ -16,13 +16,13 @@ MAX_ARTICLES_PER_DAY = 5
 MIN_RATING_THRESHOLD = 8
 
 FEEDS = [
-    'https://news.google.com/rss/search?q=Global+Healthcare+News',
-    'https://news.google.com/rss/search?q=Healthcare+India',
-    'https://news.google.com/rss/search?q=Healthcare+AI+Worldwide',
-    'https://news.google.com/rss/search?q=PMJAY+OR+Ayushman+Bharat',
-    'https://news.google.com/rss/search?q=Maa+Yojana+OR+State+Healthcare+Packages',
-    'https://news.google.com/rss/search?q=AI+achievements+in+healthcare',
-    'https://news.google.com/rss/search?q=Achievements+of+doctors+and+hospitals',
+    'https://www.bing.com/news/search?q=Global+Healthcare+News&format=rss',
+    'https://www.bing.com/news/search?q=Healthcare+India&format=rss',
+    'https://www.bing.com/news/search?q=Healthcare+AI+Worldwide&format=rss',
+    'https://www.bing.com/news/search?q=PMJAY+OR+Ayushman+Bharat&format=rss',
+    'https://www.bing.com/news/search?q=State+Healthcare+Packages+India&format=rss',
+    'https://www.bing.com/news/search?q=AI+achievements+in+healthcare&format=rss',
+    'https://www.bing.com/news/search?q=Achievements+of+doctors+and+hospitals&format=rss',
 ]
 
 # ==========================================
@@ -128,6 +128,7 @@ def main():
             
             # Skip if missing crucial data
             if not article.title or not article.text or not article.top_image:
+                print(f"Skipping (Missing Content): {url}")
                 continue
                 
             # Check if already exists in Firestore by Title (to catch different URLs of the same story)
