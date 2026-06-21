@@ -16,13 +16,16 @@ MAX_ARTICLES_PER_DAY = 5
 MIN_RATING_THRESHOLD = 8
 
 FEEDS = [
-    'https://www.bing.com/news/search?q=Global+Healthcare+News&format=rss',
-    'https://www.bing.com/news/search?q=Healthcare+India&format=rss',
-    'https://www.bing.com/news/search?q=Healthcare+AI+Worldwide&format=rss',
+    # --- India-Focused Feeds (Priority) ---
+    'https://www.bing.com/news/search?q=Healthcare+News+India&format=rss',
     'https://www.bing.com/news/search?q=PMJAY+OR+Ayushman+Bharat&format=rss',
-    'https://www.bing.com/news/search?q=State+Healthcare+Packages+India&format=rss',
-    'https://www.bing.com/news/search?q=AI+achievements+in+healthcare&format=rss',
-    'https://www.bing.com/news/search?q=Achievements+of+doctors+and+hospitals&format=rss',
+    'https://www.bing.com/news/search?q=Indian+Hospitals+Doctors&format=rss',
+    'https://www.bing.com/news/search?q=AI+in+Indian+Healthcare&format=rss',
+    'https://www.bing.com/news/search?q=Ministry+of+Health+India&format=rss',
+    
+    # --- Global / International Feeds ---
+    'https://www.bing.com/news/search?q=Global+Healthcare+Innovation&format=rss',
+    'https://www.bing.com/news/search?q=Healthcare+AI+Worldwide&format=rss',
 ]
 
 # ==========================================
