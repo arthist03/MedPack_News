@@ -45,8 +45,8 @@ def setup_clients():
         raise ValueError("GEMINI_API_KEY environment variable is missing!")
     
     genai.configure(api_key=gemini_key)
-    # Using gemini-3.1-flash as requested
-    model = genai.GenerativeModel('gemini-3.1-flash')
+    # Using gemini-3.1-flash-lite as requested
+    model = genai.GenerativeModel('gemini-3.1-flash-lite')
 
     return db, model
 
@@ -121,8 +121,10 @@ def main():
             continue
             
         try:
-            # Download and parse
-            article = Article(url)
+            # Download and parse (Pretend to be a real web browser to avoid 403 Forbidden errors)
+            config = newspaper.Config()
+            config.browser_user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            article = Article(url, config=config)
             article.download()
             article.parse()
             
