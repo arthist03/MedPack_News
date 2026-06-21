@@ -1,6 +1,6 @@
 newspaper3k==0.2.8
 feedparser==6.0.10
 firebase-admin==6.4.0
-google-generativeai==0.4.1
+google-generativeai>=0.7.0
 nltk==3.8.1
 lxml_html_clean==0.1.1
