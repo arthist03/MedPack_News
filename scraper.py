@@ -64,25 +64,22 @@ def analyze_article_with_ai(model, title, text):
     Title: {title}
     Text: {text[:3000]} # Truncated for context
 
-    Format your response EXACTLY like this:
-    [RATING] (just the integer)
-    [SUMMARY] (the 2 sentence summary)
+    Return ONLY a JSON object with exactly these two keys:
+    "rating": an integer between 1 and 10
+    "summary": the 2 sentence summary string
     """
 
     try:
-        response = model.generate_content(prompt)
-        content = response.text.strip().split('\n')
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json",
+            )
+        )
+        data = json.loads(response.text)
         
-        rating = 0
-        summary = ""
-        
-        for line in content:
-            line = line.strip()
-            if not line: continue
-            if rating == 0 and line.isdigit():
-                rating = int(line)
-            elif not summary:
-                summary = line
+        rating = int(data.get("rating", 0))
+        summary = str(data.get("summary", "")).strip()
                 
         return rating, summary
     except Exception as e:
