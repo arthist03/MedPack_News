@@ -7,7 +7,8 @@ from newspaper import Article
 import firebase_admin
 from firebase_admin import credentials, firestore
 import google.generativeai as genai
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+import calendar
 
 # ==========================================
 # CONFIGURATION
@@ -98,17 +99,33 @@ def main():
     db, model = setup_clients()
     newsletters_ref = db.collection('newsletters')
     
+    now_utc = datetime.now(timezone.utc)
+    cutoff_time = now_utc - timedelta(hours=24)
+    
     # 1. Fetch URLs from all feeds
     print("Fetching RSS feeds...")
-    article_links = []
+    article_data = {}
     for feed_url in FEEDS:
         feed = feedparser.parse(feed_url)
         for entry in feed.entries[:15]: # Top 15 from each feed
-            article_links.append(entry.link)
+            link = entry.link
+            pub_parsed = entry.get('published_parsed')
             
-    # Remove duplicates
-    article_links = list(set(article_links))
-    print(f"Found {len(article_links)} unique articles to process.")
+            # Filter by date if publication date is available in feed
+            if pub_parsed:
+                try:
+                    pub_time = datetime.fromtimestamp(calendar.timegm(pub_parsed), tz=timezone.utc)
+                    if pub_time < cutoff_time:
+                        # Skip if older than 24 hours
+                        continue
+                except Exception as ex:
+                    print(f"Error parsing pub_parsed for {link}: {ex}")
+            
+            if link not in article_data:
+                article_data[link] = pub_parsed
+            
+    article_links = list(article_data.keys())
+    print(f"Found {len(article_links)} unique articles from the past 24 hours to process.")
     
     uploaded_count = 0
     
@@ -135,6 +152,22 @@ def main():
             if not article.title or not article.text or not article.top_image:
                 print(f"Skipping (Missing Content): {url}")
                 continue
+                
+            # Filter by newspaper's publication date if available
+            if article.publish_date:
+                pub_date = article.publish_date
+                try:
+                    # Convert naive datetime to timezone-aware UTC, or normalize to UTC
+                    if pub_date.tzinfo is None:
+                        pub_date = pub_date.replace(tzinfo=timezone.utc)
+                    else:
+                        pub_date = pub_date.astimezone(timezone.utc)
+                        
+                    if pub_date < cutoff_time:
+                        print(f"Skipping (Article too old: {pub_date}): {url}")
+                        continue
+                except Exception as e:
+                    print(f"Error checking publish_date for {url}: {e}")
                 
             # Check if already exists in Firestore by Title (to catch different URLs of the same story)
             existing_title = newsletters_ref.where('title', '==', article.title).limit(1).get()

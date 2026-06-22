@@ -2,8 +2,8 @@ name: Daily Healthcare News Scraper
 
 on:
   schedule:
-    # 2:30 AM UTC is 8:00 AM IST
-    - cron: '30 2 * * *'
+    # 2:15 AM UTC is 7:45 AM IST (staggered to run reliably and avoid peak hour delays)
+    - cron: '15 2 * * *'
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
