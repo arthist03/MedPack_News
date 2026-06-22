@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import urllib.parse
 import feedparser
 import newspaper
 from newspaper import Article
@@ -13,7 +14,7 @@ import calendar
 # ==========================================
 # CONFIGURATION
 # ==========================================
-MAX_ARTICLES_PER_DAY = 5
+MAX_ARTICLES_PER_DAY = 10
 MIN_RATING_THRESHOLD = 8
 
 FEEDS = [
@@ -107,7 +108,7 @@ def main():
     article_data = {}
     for feed_url in FEEDS:
         feed = feedparser.parse(feed_url)
-        for entry in feed.entries[:15]: # Top 15 from each feed
+        for entry in feed.entries[:50]: # Top 50 from each feed
             link = entry.link
             pub_parsed = entry.get('published_parsed')
             
@@ -213,6 +214,21 @@ def main():
                 # Fallback to high-quality stock illustration if no image was found
                 if not image_url:
                     image_url = "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=800&auto=format&fit=crop"
+                
+                # Wrap non-Unsplash images with the global Cloudflare CDN-backed image proxy
+                # This compresses them to WebP, limits width to 800px, bypasses hotlink blocks, and loads instantly.
+                if image_url and not image_url.startswith("https://images.unsplash.com") and not "images.weserv.nl" in image_url:
+                    try:
+                        clean_url = image_url
+                        if clean_url.startswith("http://"):
+                            clean_url = clean_url[7:]
+                        elif clean_url.startswith("https://"):
+                            clean_url = clean_url[8:]
+                        
+                        fallback_url_encoded = urllib.parse.quote("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=800")
+                        image_url = f"https://images.weserv.nl/?url={urllib.parse.quote(clean_url)}&w=800&output=webp&errorredirect={fallback_url_encoded}"
+                    except Exception as e:
+                        print(f"Error proxying image URL: {e}")
                 
                 doc_data = {
                     'title': article.title,
