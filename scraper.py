@@ -14,7 +14,6 @@ import calendar
 # ==========================================
 # CONFIGURATION
 # ==========================================
-MAX_ARTICLES_PER_DAY = 10
 MIN_RATING_THRESHOLD = 8
 
 INDIAN_FEEDS = [
@@ -178,6 +177,46 @@ def generate_educational_tip(model):
         print(f"Fallback Generator Error: {e}")
         return "", "", "generic"
 
+def generate_fallback_article_for_category(model, category):
+    if category == 'indian':
+        topic_desc = "a major Indian healthcare initiative, PMJAY / Ayushman Bharat / Maa Yojana benefit/policy update, public health project, or AIIMS/government hospital development in India."
+    elif category == 'global':
+        topic_desc = "a significant global medical trend, breakthrough clinical study, WHO healthcare update, or major international wellness policy."
+    elif category == 'startup':
+        topic_desc = "a medical technology innovation, a healthcare startup milestone, AI/ML application in diagnostics, robotic surgery advancements, or university/IIT health tech research."
+    else:  # 'tip'
+        topic_desc = "a crucial daily health, diet, wellness, preventative care, or medical tip for patients and doctors."
+
+    prompt = f"""
+    You are an expert healthcare editor for a premium app used by doctors and patients in India (PMJAY, Maa Yojana, etc).
+    Generate a high-quality, engaging healthcare news snippet or educational article for the "{category}" category.
+    The article must cover: {topic_desc}
+
+    Make the title extremely catchy, short, and professional.
+    Write a highly engaging, professional 2-sentence summary/explanation of this topic.
+    Choose a relevant English search keyword for a medical/lifestyle image (choose exactly one of these: "pmjay", "scheme", "hospital", "doctor", "nurse", "medicine", "health", "diet", "fitness", "ai").
+
+    Return ONLY a JSON object with exactly these three keys:
+    "title": a short catchy title string
+    "summary": the 2 sentence summary string
+    "image_keyword": the selected keyword string
+    """
+    try:
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json",
+            )
+        )
+        data = json.loads(response.text)
+        title = str(data.get("title", "")).strip()
+        summary = str(data.get("summary", "")).strip()
+        keyword = str(data.get("image_keyword", "generic")).strip().lower()
+        return title, summary, keyword
+    except Exception as e:
+        print(f"Failed to generate fallback for {category}: {e}")
+        return "", "", "generic"
+
 # ==========================================
 # MAIN EXECUTION
 # ==========================================
@@ -265,12 +304,16 @@ def main():
     article_links = list(article_data.keys())
     print(f"Found {len(article_links)} unique articles from the past 24 hours to process.")
     
+    uploaded_by_category = { 'indian': 0, 'global': 0, 'startup': 0, 'tip': 0 }
+    TARGET_ARTICLES_PER_CATEGORY = 4
+    MAX_ARTICLES_PER_CATEGORY = 6
     uploaded_count = 0
     
     # 2. Process articles
     for url in article_links:
-        if uploaded_count >= MAX_ARTICLES_PER_DAY:
-            print(f"Reached daily limit of {MAX_ARTICLES_PER_DAY} articles. Stopping.")
+        # Check if all categories are already satisfied to MAX_ARTICLES_PER_CATEGORY
+        if all(count >= MAX_ARTICLES_PER_CATEGORY for count in uploaded_by_category.values()):
+            print("All categories have reached their daily limit. Stopping feed processing.")
             break
             
         # Check if already exists in Firestore by URL
@@ -317,9 +360,13 @@ def main():
             
             # 3. AI Filter
             rating, summary, category = analyze_article_with_ai(model, article.title, article.text, article_data[url]['category'])
-            print(f" -> Rating: {rating}/10")
+            print(f" -> Rating: {rating}/10, Category: {category}")
             
             if rating >= MIN_RATING_THRESHOLD and summary:
+                if uploaded_by_category[category] >= MAX_ARTICLES_PER_CATEGORY:
+                    print(f" -> Category '{category}' has already reached its cap of {MAX_ARTICLES_PER_CATEGORY}. Skipping upload.")
+                    continue
+                
                 print(" -> ACCEPTED! Uploading to Firestore...")
                 
                 # Retrieve direct image from feed or scrape from article
@@ -375,6 +422,7 @@ def main():
                 }
                 
                 newsletters_ref.add(doc_data)
+                uploaded_by_category[category] += 1
                 uploaded_count += 1
                 
         except Exception as e:
@@ -383,45 +431,58 @@ def main():
         # Small delay to respect rate limits
         time.sleep(2)
         
-    if uploaded_count == 0:
-        print("No articles processed or accepted today. Generating an educational/health tip fallback...")
-        try:
-            title, summary, keyword = generate_educational_tip(model)
-            if title and summary:
-                # Check for duplicate fallback title
+    # 3. Fill gaps for categories that have fewer than 4 articles
+    print("\nChecking for category gaps (Target: at least 4 articles per category)...")
+    for cat in ['indian', 'global', 'startup', 'tip']:
+        current_count = uploaded_by_category[cat]
+        gap = TARGET_ARTICLES_PER_CATEGORY - current_count
+        if gap > 0:
+            print(f"Category '{cat}' only has {current_count} articles. Generating {gap} fallback articles...")
+            retries = 0
+            while gap > 0 and retries < gap * 3:
+                retries += 1
+                title, summary, keyword = generate_fallback_article_for_category(model, cat)
+                if not title or not summary:
+                    continue
+                
+                # Check duplicate title in Firestore
                 existing_title = newsletters_ref.where('title', '==', title).limit(1).get()
                 if len(existing_title) > 0:
                     print(f"Skipping duplicate fallback title: {title}")
-                else:
-                    image_url = get_fallback_image(keyword)
-                    
-                    # Wrap with CDN resize proxy
-                    try:
-                        clean_url = image_url
-                        if clean_url.startswith("http://"):
-                            clean_url = clean_url[7:]
-                        elif clean_url.startswith("https://"):
-                            clean_url = clean_url[8:]
-                        fallback_url_encoded = urllib.parse.quote("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=800")
-                        image_url = f"https://images.weserv.nl/?url={urllib.parse.quote(clean_url)}&w=800&output=webp&errorredirect={fallback_url_encoded}"
-                    except Exception as e:
-                        print(f"Error proxying fallback image: {e}")
-                    
-                    doc_data = {
-                        'title': title,
-                        'summary': summary,
-                        'imageUrl': image_url,
-                        'readMoreLink': 'https://dashboard.pmjay.gov.in/', # General fallback link
-                        'category': 'tip',
-                        'isActive': True,
-                        'createdAt': firestore.SERVER_TIMESTAMP
-                    }
-                    
-                    newsletters_ref.add(doc_data)
-                    print(f"Uploaded fallback educational card: '{title}'")
-                    uploaded_count += 1
-        except Exception as e:
-            print(f"Failed to generate fallback: {e}")
+                    continue
+                
+                image_url = get_fallback_image(keyword)
+                
+                # Wrap with CDN resize proxy
+                try:
+                    clean_url = image_url
+                    if clean_url.startswith("http://"):
+                        clean_url = clean_url[7:]
+                    elif clean_url.startswith("https://"):
+                        clean_url = clean_url[8:]
+                    fallback_url_encoded = urllib.parse.quote("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=800")
+                    image_url = f"https://images.weserv.nl/?url={urllib.parse.quote(clean_url)}&w=800&output=webp&errorredirect={fallback_url_encoded}"
+                except Exception as e:
+                    print(f"Error proxying fallback image: {e}")
+                
+                doc_data = {
+                    'title': title,
+                    'summary': summary,
+                    'imageUrl': image_url,
+                    'readMoreLink': 'https://dashboard.pmjay.gov.in/', # General fallback link
+                    'category': cat,
+                    'isActive': True,
+                    'createdAt': firestore.SERVER_TIMESTAMP
+                }
+                
+                newsletters_ref.add(doc_data)
+                print(f"Uploaded fallback educational card for '{cat}': '{title}'")
+                uploaded_by_category[cat] += 1
+                uploaded_count += 1
+                gap -= 1
+                time.sleep(1)
+        else:
+            print(f"Category '{cat}' is fully satisfied with {current_count} articles.")
             
     print(f"[{datetime.now()}] Pipeline finished. Successfully uploaded {uploaded_count} premium articles.")
 
