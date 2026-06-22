@@ -122,7 +122,10 @@ def main():
                     print(f"Error parsing pub_parsed for {link}: {ex}")
             
             if link not in article_data:
-                article_data[link] = pub_parsed
+                article_data[link] = {
+                    'pub_parsed': pub_parsed,
+                    'news_image': entry.get('news_image')
+                }
             
     article_links = list(article_data.keys())
     print(f"Found {len(article_links)} unique articles from the past 24 hours to process.")
@@ -148,8 +151,8 @@ def main():
             article.download()
             article.parse()
             
-            # Skip if missing crucial data
-            if not article.title or not article.text or not article.top_image:
+            # Skip if missing crucial data (no longer strictly requiring top_image)
+            if not article.title or not article.text:
                 print(f"Skipping (Missing Content): {url}")
                 continue
                 
@@ -184,10 +187,37 @@ def main():
             if rating >= MIN_RATING_THRESHOLD and summary:
                 print(" -> ACCEPTED! Uploading to Firestore...")
                 
+                # Retrieve direct image from feed or scrape from article
+                feed_image = article_data[url].get('news_image')
+                image_url = ""
+                if feed_image:
+                    image_url = feed_image
+                elif article.top_image:
+                    image_url = article.top_image
+                elif hasattr(article, 'images') and article.images:
+                    # Clean and find a good image from the article
+                    valid_images = []
+                    for img_url in article.images:
+                        lower_url = img_url.lower()
+                        # Skip small tracking pixels, logos, icons, avatars, sprites, etc.
+                        if any(x in lower_url for x in ['logo', 'icon', 'ad', 'pixel', 'avatar', 'sprite']):
+                            continue
+                        if lower_url.endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                            valid_images.append(img_url)
+                    
+                    if valid_images:
+                        image_url = valid_images[0]
+                    else:
+                        image_url = list(article.images)[0]
+                
+                # Fallback to high-quality stock illustration if no image was found
+                if not image_url:
+                    image_url = "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=800&auto=format&fit=crop"
+                
                 doc_data = {
                     'title': article.title,
                     'summary': summary,
-                    'imageUrl': article.top_image,
+                    'imageUrl': image_url,
                     'readMoreLink': url,
                     'isActive': True,
                     'createdAt': firestore.SERVER_TIMESTAMP
