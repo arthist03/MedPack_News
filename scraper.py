@@ -118,47 +118,76 @@ def analyze_article_with_ai(model, title, text, default_category):
 # ==========================================
 # FALLBACK GENERATOR (PLAN C)
 # ==========================================
-IMAGE_MAP = {
-    'pmjay': 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&auto=format&fit=crop',
-    'scheme': 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800&auto=format&fit=crop',
-    'hospital': 'https://images.unsplash.com/photo-1586773860418-d3b3a998fc65?w=800&auto=format&fit=crop',
-    'doctor': 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=800&auto=format&fit=crop',
-    'nurse': 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=800&auto=format&fit=crop',
-    'medicine': 'https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=800&auto=format&fit=crop',
-    'health': 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&auto=format&fit=crop',
-    'diet': 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800&auto=format&fit=crop',
-    'fitness': 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=800&auto=format&fit=crop',
-    'ai': 'https://images.unsplash.com/photo-1507146426996-ef05306b995a?w=800&auto=format&fit=crop',
-    'generic': 'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=800&auto=format&fit=crop'
+AVAILABLE_IMAGES = {
+    # PMJAY / Schemes / Indian Gov
+    'photo-1576091160550-2173dba999ef': 'Doctor pointing to clinic dashboard / healthcare policy screen',
+    'photo-1537368910025-700350fe46c7': 'Group of Indian doctors / healthcare workers smiling',
+    'photo-1629909613654-28e377c37b09': 'Stethoscope resting on PMJAY/scheme policy documents',
+    'photo-1454165804606-c3d57bc86b40': 'Signing health insurance or medical scheme papers',
+    'photo-1554224155-8d04cb21cd6c': 'Medical billing, cost calculation, or healthcare financial papers',
+    
+    # Hospital / Clinical Interior
+    'photo-1586773860418-d3b3a998fc65': 'Modern clinic or hospital building entrance',
+    'photo-1519494026892-80bbd2d6fd0d': 'Bright hospital corridor with clinic rooms, healthcare interiors',
+    'photo-1587351021759-3e566b6af7cc': 'Hospital waiting lounge / clinic reception counter',
+    'photo-1516549655169-df83a0774514': 'Clinical lab testing, science research lab, syringes, blood tests',
+    
+    # Doctors & Nurses Consultations
+    'photo-1622253692010-333f2da6031d': 'Indian male doctor portrait with stethoscope, smiling',
+    'photo-1559839734-2b71ea197ec2': 'Female doctor consulting with patient in office',
+    'photo-1594824813573-246434de83fb': 'Female pediatrician or clinic doctor with clipboard',
+    'photo-1584515979956-d9f6e5d09982': 'Nurse in clinical scrubs checking hospital bed patient',
+    'photo-1576765608535-5f04d1e3f289': 'Home nurse caregiver assisting elderly patient',
+    'photo-1631815589968-fdb09a223b1e': 'Young female nurse or doctor portrait',
+    
+    # Medicine / Biotech / Surgery
+    'photo-1584017911766-d451b3d0e843': 'Spilled prescription capsules and medicine bottles',
+    'photo-1471864190281-a93a3070b6de': 'Pile of colored medical pills, tablets, and antibiotics',
+    'photo-1576602976047-174e57a47881': 'Pharmacy shop counters, chemist selling medicines',
+    'photo-1551601651-2a8555f1a136': 'Surgeons performing open heart or robotic surgery in operating theater',
+    'photo-1579684385127-1ef15d508118': 'Dentist checking teeth of patient, dental checkup clinic',
+    
+    # Healthy Diet / Lifestyle
+    'photo-1490645935967-10de6ba17061': 'Healthy eating salad plate with fresh avocado and seeds',
+    'photo-1512621776951-a57141f2eefd': 'Table with fresh fruits, greens, organic health diet',
+    'photo-1540420773420-3366772f4999': 'Healthy diet meal prep planning boxes',
+    'photo-1506126613408-eca07ce68773': 'Person practicing yoga meditation, stress relief, mental health wellness',
+    'photo-1544367567-0f2fcb009e0b': 'Stretching exercises, yoga routine, active healthy body',
+    
+    # Fitness / Exercise
+    'photo-1517838277536-f5f99be501cd': 'Sports running shoes, dumbbells, water, workout gear',
+    'photo-1476480862126-209bfaa8edc8': 'Jogging outdoors, cardio exercise, fitness training running',
+    'photo-1518611012118-696072aa579a': 'Fitness stretching class in health club',
+    
+    # AI / Digital Health
+    'photo-1507146426996-ef05306b995a': 'Abstract artificial intelligence brain tech node, grid, network',
+    'photo-1677442136019-21780efad99a': 'Robotic hands, cyborg, engineering AI in medicine',
+    'photo-1526374965328-7f61d4dc18c5': 'Abstract binary code, digital medical cloud database',
+    
+    # Generic Fallbacks
+    'photo-1505751172876-fa1923c5c528': 'Stethoscope on a notebook, general clinical research',
+    'photo-1527613426441-4da17471b66d': 'Medical staff holding hands in unity, clinic teamwork support'
 }
 
-def get_fallback_image(keyword):
-    keyword = keyword.lower()
-    for key, url in IMAGE_MAP.items():
-        if key in keyword:
-            return url
-    return IMAGE_MAP['generic']
+def get_image_url_by_id(image_id):
+    if image_id not in AVAILABLE_IMAGES:
+        image_id = "photo-1505751172876-fa1923c5c528"
+    return f"https://images.unsplash.com/{image_id}?w=1200&q=85&auto=format&fit=crop"
 
-def generate_educational_tip(model):
-    prompt = """
-    You are an expert healthcare editor for a premium app used by doctors and patients in India (PMJAY, Maa Yojana, etc).
-    Since there is no breaking news today, generate an educational tip, scheme fact, or health guide card for our users.
+def select_relevant_image_for_article(model, title, summary):
+    images_desc = "\n".join([f"- ID: {img_id} | Description: {desc}" for img_id, desc in AVAILABLE_IMAGES.items()])
     
-    Choose one of these categories:
-    1. A PMJAY / Ayushman Bharat / Maa Yojana scheme benefit or rule that people often don't know (e.g. pre-existing conditions covered from day 1, free diagnostics, how to check eligibility, card generation, claim process, hospital networks).
-    2. A crucial daily health or wellness tip (diet, exercise, preventive care, hydration, hygiene, mental health).
-    3. An advancement in AI or digital health in India (ABHA health ID, e-Sanjeevani teleconsultation).
-    
-    Make the title extremely catchy, short, and professional.
-    Write a highly engaging, professional 2-sentence explanation/summary.
-    Also, choose a relevant English search keyword for a medical/lifestyle image (choose exactly one of these: "pmjay", "scheme", "hospital", "doctor", "nurse", "medicine", "health", "diet", "fitness", "ai").
-    
-    Return ONLY a JSON object with exactly these three keys:
-    "title": a short catchy title string
-    "summary": the 2 sentence summary/explanation string
-    "image_keyword": the selected keyword string
+    prompt = f"""
+    You are an expert healthcare editor. Review the following medical article:
+    Title: {title}
+    Summary: {summary}
+
+    Select the ID of the image from this list of premium healthcare and wellness photos that is most relevant to the subject of this article:
+    {images_desc}
+
+    Return ONLY a JSON object with exactly this one key:
+    "image_id": the selected image ID from the list
     """
-    
     try:
         response = model.generate_content(
             prompt,
@@ -167,15 +196,13 @@ def generate_educational_tip(model):
             )
         )
         data = json.loads(response.text)
-        
-        title = str(data.get("title", "")).strip()
-        summary = str(data.get("summary", "")).strip()
-        keyword = str(data.get("image_keyword", "generic")).strip().lower()
-        
-        return title, summary, keyword
+        image_id = str(data.get("image_id", "photo-1505751172876-fa1923c5c528")).strip()
+        if image_id not in AVAILABLE_IMAGES:
+            image_id = "photo-1505751172876-fa1923c5c528"
+        return image_id
     except Exception as e:
-        print(f"Fallback Generator Error: {e}")
-        return "", "", "generic"
+        print(f"Failed to select relevant image: {e}")
+        return "photo-1505751172876-fa1923c5c528"
 
 def generate_fallback_article_for_category(model, category):
     if category == 'indian':
@@ -187,6 +214,8 @@ def generate_fallback_article_for_category(model, category):
     else:  # 'tip'
         topic_desc = "a crucial daily health, diet, wellness, preventative care, or medical tip for patients and doctors."
 
+    images_desc = "\n".join([f"- ID: {img_id} | Description: {desc}" for img_id, desc in AVAILABLE_IMAGES.items()])
+
     prompt = f"""
     You are an expert healthcare editor for a premium app used by doctors and patients in India (PMJAY, Maa Yojana, etc).
     Generate a high-quality, engaging healthcare news snippet or educational article for the "{category}" category.
@@ -194,12 +223,14 @@ def generate_fallback_article_for_category(model, category):
 
     Make the title extremely catchy, short, and professional.
     Write a highly engaging, professional 2-sentence summary/explanation of this topic.
-    Choose a relevant English search keyword for a medical/lifestyle image (choose exactly one of these: "pmjay", "scheme", "hospital", "doctor", "nurse", "medicine", "health", "diet", "fitness", "ai").
+    
+    Review this list of available premium image options and select the ID of the image that is most relevant to the article you generated:
+    {images_desc}
 
     Return ONLY a JSON object with exactly these three keys:
     "title": a short catchy title string
     "summary": the 2 sentence summary string
-    "image_keyword": the selected keyword string
+    "image_id": the selected image ID from the list above
     """
     try:
         response = model.generate_content(
@@ -211,11 +242,15 @@ def generate_fallback_article_for_category(model, category):
         data = json.loads(response.text)
         title = str(data.get("title", "")).strip()
         summary = str(data.get("summary", "")).strip()
-        keyword = str(data.get("image_keyword", "generic")).strip().lower()
-        return title, summary, keyword
+        image_id = str(data.get("image_id", "photo-1505751172876-fa1923c5c528")).strip()
+        
+        if image_id not in AVAILABLE_IMAGES:
+            image_id = "photo-1505751172876-fa1923c5c528"
+            
+        return title, summary, image_id
     except Exception as e:
         print(f"Failed to generate fallback for {category}: {e}")
-        return "", "", "generic"
+        return "", "", "photo-1505751172876-fa1923c5c528"
 
 # ==========================================
 # MAIN EXECUTION
@@ -394,10 +429,11 @@ def main():
                 
                 # Fallback to high-quality stock illustration if no image was found
                 if not image_url:
-                    image_url = "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=800&auto=format&fit=crop"
+                    fallback_id = select_relevant_image_for_article(model, article.title, summary)
+                    image_url = get_image_url_by_id(fallback_id)
                 
                 # Wrap non-Unsplash images with the global Cloudflare CDN-backed image proxy
-                # This compresses them to WebP, limits width to 800px, bypasses hotlink blocks, and loads instantly.
+                # This compresses them to WebP, limits width to 1200px, bypasses hotlink blocks, and loads instantly.
                 if image_url and not image_url.startswith("https://images.unsplash.com") and not "images.weserv.nl" in image_url:
                     try:
                         clean_url = image_url
@@ -406,8 +442,8 @@ def main():
                         elif clean_url.startswith("https://"):
                             clean_url = clean_url[8:]
                         
-                        fallback_url_encoded = urllib.parse.quote("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=800")
-                        image_url = f"https://images.weserv.nl/?url={urllib.parse.quote(clean_url)}&w=800&output=webp&errorredirect={fallback_url_encoded}"
+                        fallback_url_encoded = urllib.parse.quote("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=1200&q=85")
+                        image_url = f"https://images.weserv.nl/?url={urllib.parse.quote(clean_url)}&w=1200&q=85&output=webp&errorredirect={fallback_url_encoded}"
                     except Exception as e:
                         print(f"Error proxying image URL: {e}")
                 
@@ -441,7 +477,7 @@ def main():
             retries = 0
             while gap > 0 and retries < gap * 3:
                 retries += 1
-                title, summary, keyword = generate_fallback_article_for_category(model, cat)
+                title, summary, image_id = generate_fallback_article_for_category(model, cat)
                 if not title or not summary:
                     continue
                 
@@ -451,19 +487,7 @@ def main():
                     print(f"Skipping duplicate fallback title: {title}")
                     continue
                 
-                image_url = get_fallback_image(keyword)
-                
-                # Wrap with CDN resize proxy
-                try:
-                    clean_url = image_url
-                    if clean_url.startswith("http://"):
-                        clean_url = clean_url[7:]
-                    elif clean_url.startswith("https://"):
-                        clean_url = clean_url[8:]
-                    fallback_url_encoded = urllib.parse.quote("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=800")
-                    image_url = f"https://images.weserv.nl/?url={urllib.parse.quote(clean_url)}&w=800&output=webp&errorredirect={fallback_url_encoded}"
-                except Exception as e:
-                    print(f"Error proxying fallback image: {e}")
+                image_url = get_image_url_by_id(image_id)
                 
                 doc_data = {
                     'title': title,
