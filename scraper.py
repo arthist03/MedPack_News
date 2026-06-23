@@ -70,7 +70,7 @@ def setup_clients():
 # ==========================================
 # AI RATING & SUMMARY GENERATION
 # ==========================================
-def analyze_article_with_ai(model, title, text, default_category):
+def analyze_article_with_ai(model, title, text, default_category, recent_titles):
     prompt = f"""
     You are an expert healthcare editor for a premium app used by doctors and patients in India (PMJAY, Maa Yojana, etc).
     Review the following news article. 
@@ -86,13 +86,17 @@ def analyze_article_with_ai(model, title, text, default_category):
        Note: If the article is about startups, new medical tech, research breakthroughs, AI, or advanced tech in medicine (Indian or global), prioritize placing it in the "startup" category.
        Default category if unclear: "{default_category}"
 
+    4. CRITICAL DEDUPLICATION CHECK: Compare this article's headline and topic against the list of recently published news titles below. If it covers the exact same event, announcement, development, or advice (even if written differently), you MUST identify it as a duplicate by setting the "rating" to 0 and "is_duplicate" to true.
+       Recent titles list: {json.dumps(recent_titles)}
+
     Title: {title}
     Text: {text[:3000]} # Truncated for context
 
-    Return ONLY a JSON object with exactly these three keys:
-    "rating": an integer between 1 to 10
+    Return ONLY a JSON object with exactly these four keys:
+    "rating": an integer between 0 to 10 (use 0 if duplicate)
     "summary": the 2 sentence summary string
     "category": the category string ("indian", "global", "startup", or "tip")
+    "is_duplicate": a boolean (true if it covers the same news event/announcement as any recent title, false otherwise)
     """
 
     try:
@@ -107,13 +111,17 @@ def analyze_article_with_ai(model, title, text, default_category):
         rating = int(data.get("rating", 0))
         summary = str(data.get("summary", "")).strip()
         category = str(data.get("category", default_category)).strip().lower()
+        is_duplicate = bool(data.get("is_duplicate", False))
         if category not in ["indian", "global", "startup", "tip"]:
             category = default_category
+            
+        if is_duplicate:
+            rating = 0
                 
-        return rating, summary, category
+        return rating, summary, category, is_duplicate
     except Exception as e:
         print(f"AI Error: {e}")
-        return 0, "", default_category
+        return 0, "", default_category, False
 
 # ==========================================
 # FALLBACK GENERATOR (PLAN C)
@@ -172,7 +180,7 @@ AVAILABLE_IMAGES = {
 def get_image_url_by_id(image_id):
     if image_id not in AVAILABLE_IMAGES:
         image_id = "photo-1505751172876-fa1923c5c528"
-    return f"https://images.unsplash.com/{image_id}?w=1200&q=85&auto=format&fit=crop"
+    return f"https://images.unsplash.com/{image_id}?w=1600&fm=webp&q=100&fit=crop"
 
 def select_relevant_image_for_article(model, title, summary):
     images_desc = "\n".join([f"- ID: {img_id} | Description: {desc}" for img_id, desc in AVAILABLE_IMAGES.items()])
@@ -204,7 +212,7 @@ def select_relevant_image_for_article(model, title, summary):
         print(f"Failed to select relevant image: {e}")
         return "photo-1505751172876-fa1923c5c528"
 
-def generate_fallback_article_for_category(model, category):
+def generate_fallback_article_for_category(model, category, recent_titles):
     if category == 'indian':
         topic_desc = "a major Indian healthcare initiative, PMJAY / Ayushman Bharat / Maa Yojana benefit/policy update, public health project, or AIIMS/government hospital development in India."
     elif category == 'global':
@@ -226,6 +234,12 @@ def generate_fallback_article_for_category(model, category):
     
     Review this list of available premium image options and select the ID of the image that is most relevant to the article you generated:
     {images_desc}
+
+    CRITICAL DEDUPLICATION CHECK:
+    Do NOT generate any topic, event, or announcement that is a duplicate or covers the same news/tip as any of the titles in the following list:
+    {json.dumps(recent_titles)}
+    
+    Ensure the article generated is fresh and semantically distinct from everything in the list above.
 
     Return ONLY a JSON object with exactly these three keys:
     "title": a short catchy title string
@@ -261,6 +275,20 @@ def main():
     db, model = setup_clients()
     newsletters_ref = db.collection('newsletters')
     
+    # Retrieve recent active article titles from the last 7 days for semantic deduplication
+    recent_titles = []
+    try:
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        recent_docs = newsletters_ref.where('createdAt', '>=', seven_days_ago).get()
+        for doc in recent_docs:
+            d = doc.to_dict()
+            title = d.get('title')
+            if title:
+                recent_titles.append(title.strip())
+        print(f"Retrieved {len(recent_titles)} recent titles from the last 7 days for semantic deduplication.")
+    except Exception as e:
+        print(f"Error fetching recent titles from Firestore: {e}")
+        
     now_utc = datetime.now(timezone.utc)
     cutoff_time = now_utc - timedelta(hours=24)
     
@@ -394,8 +422,8 @@ def main():
             print(f"Analyzing: {article.title}")
             
             # 3. AI Filter
-            rating, summary, category = analyze_article_with_ai(model, article.title, article.text, article_data[url]['category'])
-            print(f" -> Rating: {rating}/10, Category: {category}")
+            rating, summary, category, is_duplicate = analyze_article_with_ai(model, article.title, article.text, article_data[url]['category'], recent_titles)
+            print(f" -> Rating: {rating}/10, Category: {category}, Duplicate: {is_duplicate}")
             
             if rating >= MIN_RATING_THRESHOLD and summary:
                 if uploaded_by_category[category] >= MAX_ARTICLES_PER_CATEGORY:
@@ -433,7 +461,7 @@ def main():
                     image_url = get_image_url_by_id(fallback_id)
                 
                 # Wrap non-Unsplash images with the global Cloudflare CDN-backed image proxy
-                # This compresses them to WebP, limits width to 1200px, bypasses hotlink blocks, and loads instantly.
+                # This compresses them to WebP, limits width to 1600px, bypasses hotlink blocks, and loads losslessly.
                 if image_url and not image_url.startswith("https://images.unsplash.com") and not "images.weserv.nl" in image_url:
                     try:
                         clean_url = image_url
@@ -442,8 +470,8 @@ def main():
                         elif clean_url.startswith("https://"):
                             clean_url = clean_url[8:]
                         
-                        fallback_url_encoded = urllib.parse.quote("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=1200&q=85")
-                        image_url = f"https://images.weserv.nl/?url={urllib.parse.quote(clean_url)}&w=1200&q=85&output=webp&errorredirect={fallback_url_encoded}"
+                        fallback_url_encoded = urllib.parse.quote("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=1600&fm=webp&q=100")
+                        image_url = f"https://images.weserv.nl/?url={urllib.parse.quote(clean_url)}&w=1600&q=100&output=webp&errorredirect={fallback_url_encoded}"
                     except Exception as e:
                         print(f"Error proxying image URL: {e}")
                 
@@ -460,6 +488,7 @@ def main():
                 newsletters_ref.add(doc_data)
                 uploaded_by_category[category] += 1
                 uploaded_count += 1
+                recent_titles.append(article.title.strip())
                 
         except Exception as e:
             print(f"Error processing {url}: {e}")
@@ -477,14 +506,18 @@ def main():
             retries = 0
             while gap > 0 and retries < gap * 3:
                 retries += 1
-                title, summary, image_id = generate_fallback_article_for_category(model, cat)
+                title, summary, image_id = generate_fallback_article_for_category(model, cat, recent_titles)
                 if not title or not summary:
                     continue
                 
                 # Check duplicate title in Firestore
                 existing_title = newsletters_ref.where('title', '==', title).limit(1).get()
                 if len(existing_title) > 0:
-                    print(f"Skipping duplicate fallback title: {title}")
+                    print(f"Skipping duplicate fallback title (exact firestore): {title}")
+                    continue
+                    
+                if title.strip() in recent_titles:
+                    print(f"Skipping duplicate fallback title (recent list): {title}")
                     continue
                 
                 image_url = get_image_url_by_id(image_id)
@@ -503,6 +536,7 @@ def main():
                 print(f"Uploaded fallback educational card for '{cat}': '{title}'")
                 uploaded_by_category[cat] += 1
                 uploaded_count += 1
+                recent_titles.append(title.strip())
                 gap -= 1
                 time.sleep(1)
         else:
