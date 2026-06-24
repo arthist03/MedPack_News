@@ -42,6 +42,13 @@ TECH_AND_STARTUP_FEEDS = [
     'https://www.bing.com/news/search?q=Healthcare+Research+Institutes&format=rss',
 ]
 
+RESEARCH_FEEDS = [
+    'https://www.nature.com/nm.rss',
+    'https://jamanetwork.com/rss/journals/jama/mostread.xml',
+    'https://connect.medrxiv.org/medrxiv_xml.php?subject=public_health',
+    'https://connect.medrxiv.org/medrxiv_xml.php?subject=primary_care',
+]
+
 # ==========================================
 # SETUP FIREBASE & GEMINI
 # ==========================================
@@ -73,17 +80,19 @@ def setup_clients():
 def analyze_article_with_ai(model, title, text, default_category, recent_titles):
     prompt = f"""
     You are an expert healthcare editor for a premium app used by doctors and patients in India (PMJAY, Maa Yojana, etc).
-    Review the following news article. 
+    Review the following news article or medical research paper/abstract. 
 
     1. Rate it from 1 to 10 based on its "wow-factor", importance, and relevance to healthcare professionals, AI in healthcare, or PMJAY beneficiaries. (Generic or boring news should be rated 3 or below).
-    2. Write a highly engaging, professional 2-sentence summary of the article. Do not sound like an AI. Make it sound like a premium news snippet.
+    2. Write a highly engaging, professional 2-sentence summary of the article. 
+       - CRITICAL TIP RULE: If the article is classified as a "tip" or is a research paper being summarized as a "tip", do NOT write an academic summary of the study methodology. Instead, extract a practical, actionable health, diet, wellness, or preventative care tip for patients/clinicians based directly on the paper's findings/conclusions.
+       - Do not sound like an AI. Make it sound like a premium news snippet or a clean, helpful advice tip.
     3. Categorize this article into exactly one of these four categories:
        - "indian": General healthcare news, policies, government schemes (PMJAY, Ayushman Bharat), or doctor/hospital updates in India.
        - "global": General healthcare news, trends, policies, or hospital updates outside India.
        - "startup": News about healthcare startups, medical technology/device innovations, research institutes (like IITs, AIIMS, universities) and what they are researching, biotechnology, AI/ML in medicine, robotics, precision/personalized medicine, telemedicine, IoMT, digital twins, 3D bioprinting, or blockchain in healthcare.
-       - "tip": Health, diet, wellness, exercise, or preventive care tips for patients or doctors.
+       - "tip": Scientific medical studies, clinical trials, health, diet, wellness, exercise, or preventive care advice that translates into tips for patients or doctors.
        
-       Note: If the article is about startups, new medical tech, research breakthroughs, AI, or advanced tech in medicine (Indian or global), prioritize placing it in the "startup" category.
+       Note: If the article is a scientific study/clinical trial or explicitly offers healthy living/preventive advice, put it in the "tip" category. If it is about tech, AI, or corporate startups, prioritize "startup".
        Default category if unclear: "{default_category}"
 
     4. CRITICAL DEDUPLICATION CHECK: Compare this article's headline and topic against the list of recently published news titles below. If it covers the exact same event, announcement, development, or advice (even if written differently), you MUST identify it as a duplicate by setting the "rating" to 0 and "is_duplicate" to true.
@@ -362,6 +371,29 @@ def main():
                     'pub_parsed': pub_parsed,
                     'news_image': entry.get('news_image'),
                     'category': 'startup'
+                }
+            
+    # Process Research Feeds (for daily health tips)
+    for feed_url in RESEARCH_FEEDS:
+        feed = feedparser.parse(feed_url)
+        for entry in feed.entries[:50]:
+            link = entry.link
+            pub_parsed = entry.get('published_parsed')
+            
+            # Filter by date if publication date is available in feed
+            if pub_parsed:
+                try:
+                    pub_time = datetime.fromtimestamp(calendar.timegm(pub_parsed), tz=timezone.utc)
+                    if pub_time < cutoff_time:
+                        continue
+                except Exception as ex:
+                    print(f"Error parsing pub_parsed for {link}: {ex}")
+            
+            if link not in article_data:
+                article_data[link] = {
+                    'pub_parsed': pub_parsed,
+                    'news_image': entry.get('news_image'),
+                    'category': 'tip'
                 }
             
     article_links = list(article_data.keys())
