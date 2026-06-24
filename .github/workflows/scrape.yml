@@ -6,6 +6,9 @@ on:
     - cron: '15 2 * * *'
   workflow_dispatch: {} # Allows manual trigger from GitHub UI
 
+permissions:
+  contents: write
+
 jobs:
   scrape-and-upload:
     runs-on: ubuntu-latest
@@ -37,3 +40,6 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python scraper.py
+
+      - name: Keep workflow active
+        uses: gautamkrishnar/keepalive-workflow@v2
