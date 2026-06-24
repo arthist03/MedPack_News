@@ -4,14 +4,22 @@ on:
   schedule:
     # 2:15 AM UTC is 7:45 AM IST (staggered to run reliably and avoid peak hour delays)
     - cron: '15 2 * * *'
-  workflow_dispatch: {} # Allows manual trigger from GitHub UI
+  workflow_dispatch: {}
 
 permissions:
   contents: write
 
+# OPTIMIZATION 1: Prevent concurrent runs from stepping on each other
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false 
+
 jobs:
   scrape-and-upload:
     runs-on: ubuntu-latest
+    
+    # OPTIMIZATION 2: Fail-fast timeout to prevent hanging scrapers from burning minutes
+    timeout-minutes: 30 
     
     steps:
       - name: Checkout repository
@@ -23,16 +31,24 @@ jobs:
           python-version: '3.10'
           cache: 'pip'
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-dev libxml2-dev libxslt1-dev libjpeg-dev zlib1g-dev libpng-dev
+      # OPTIMIZATION 3: Cache NLTK downloads to speed up the setup phase
+      - name: Cache NLTK Data
+        uses: actions/cache@v4
+        id: cache-nltk
+        with:
+          path: ~/nltk_data
+          key: ${{ runner.os }}-nltk-punkt
+
+      # OPTIMIZATION 4: Removed `apt-get install` block (See notes below)
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python -m nltk.downloader punkt
+          
+      - name: Download NLTK Data (if not cached)
+        # NLTK will automatically skip the download if the cache restored the files
+        run: python -m nltk.downloader punkt
 
       - name: Run Scraper
         env:
