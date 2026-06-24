@@ -55,5 +55,12 @@ jobs:
         run: |
           python scraper.py
 
-      - name: Keep workflow active
-        uses: gautamkrishnar/keepalive-workflow@v2
+      - name: Keep workflow active (Custom keep-alive)
+        if: github.event_name == 'schedule'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          date > keepalive.txt
+          git add keepalive.txt
+          git commit -m "chore: keepalive commit [skip ci]" || exit 0
+          git push
