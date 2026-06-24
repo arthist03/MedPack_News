@@ -39,8 +39,6 @@ jobs:
           path: ~/nltk_data
           key: ${{ runner.os }}-nltk-punkt
 
-      # OPTIMIZATION 4: Removed `apt-get install` block (See notes below)
-
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
