@@ -1,7 +1,9 @@
 import os
 import json
+import re
 import time
 import urllib.parse
+import requests
 import feedparser
 import newspaper
 from newspaper import Article
@@ -150,10 +152,71 @@ def analyze_article_with_ai(model, title, text, default_category, recent_titles)
         return 0, "", default_category, False
 
 # ==========================================
-# STOCK IMAGE FALLBACK (for articles without images)
+# IMAGE SEARCH (for articles without images)
 # ==========================================
-FALLBACK_IMAGE_URL = "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=1600&fm=webp&q=100&fit=crop"
+GENERIC_FALLBACK_IMAGE = "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=1600&fm=webp&q=100&fit=crop"
 
+def search_image_by_keywords(title):
+    """Search Bing Images for a relevant image based on article title keywords.
+    Returns the URL of the first matching image, or falls back to a generic stock photo.
+    """
+    # Take first ~5 words from the title + 'healthcare' for a focused image search
+    words = title.split()[:5]
+    query = " ".join(words) + " healthcare"
+    search_url = f"https://www.bing.com/images/search?q={urllib.parse.quote_plus(query)}&first=1&qft=+filterui:photo-photo"
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    try:
+        response = requests.get(search_url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            # Bing embeds original image URLs in JSON data attributes as "murl"
+            urls = re.findall(r'"murl":"(https?://[^"]+)"', response.text)
+            if urls:
+                # Return the first valid image URL found
+                print(f"   Found relevant image via Bing for: {title[:50]}...")
+                return urls[0]
+    except Exception as e:
+        print(f"   Image search failed for '{title[:40]}': {e}")
+    
+    print(f"   No image found via search, using generic fallback for: {title[:50]}...")
+    return GENERIC_FALLBACK_IMAGE
+
+def extract_image_from_feed_entry(entry):
+    """Extract the best available image URL from an RSS feed entry."""
+    # Check direct news_image field
+    if entry.get('news_image'):
+        return entry.get('news_image')
+    
+    # Check media:content (common in RSS feeds)
+    if hasattr(entry, 'media_content') and entry.media_content:
+        for media in entry.media_content:
+            url = media.get('url', '')
+            if url and any(ext in url.lower() for ext in ['.jpg', '.jpeg', '.png', '.webp', 'image']):
+                return url
+    
+    # Check media:thumbnail
+    if hasattr(entry, 'media_thumbnail') and entry.media_thumbnail:
+        for thumb in entry.media_thumbnail:
+            url = thumb.get('url', '')
+            if url:
+                return url
+    
+    # Check enclosures
+    if hasattr(entry, 'enclosures') and entry.enclosures:
+        for enc in entry.enclosures:
+            if enc.get('type', '').startswith('image/'):
+                return enc.get('href', '') or enc.get('url', '')
+    
+    # Check links for image types
+    if hasattr(entry, 'links'):
+        for link in entry.links:
+            if link.get('type', '').startswith('image/'):
+                return link.get('href', '')
+    
+    return ""
 # ==========================================
 # MAIN EXECUTION
 # ==========================================
@@ -202,7 +265,7 @@ def main():
             if link not in article_data:
                 article_data[link] = {
                     'pub_parsed': pub_parsed,
-                    'news_image': entry.get('news_image'),
+                    'feed_entry': entry,
                     'category': 'indian'
                 }
 
@@ -225,7 +288,7 @@ def main():
             if link not in article_data:
                 article_data[link] = {
                     'pub_parsed': pub_parsed,
-                    'news_image': entry.get('news_image'),
+                    'feed_entry': entry,
                     'category': 'global'
                 }
 
@@ -248,7 +311,7 @@ def main():
             if link not in article_data:
                 article_data[link] = {
                     'pub_parsed': pub_parsed,
-                    'news_image': entry.get('news_image'),
+                    'feed_entry': entry,
                     'category': 'startup'
                 }
             
@@ -271,7 +334,7 @@ def main():
             if link not in article_data:
                 article_data[link] = {
                     'pub_parsed': pub_parsed,
-                    'news_image': entry.get('news_image'),
+                    'feed_entry': entry,
                     'category': 'tip'
                 }
             
@@ -344,7 +407,7 @@ def main():
                 print(" -> ACCEPTED! Uploading to Firestore...")
                 
                 # Retrieve direct image from feed or scrape from article
-                feed_image = article_data[url].get('news_image')
+                feed_image = extract_image_from_feed_entry(article_data[url].get('feed_entry', {}))
                 image_url = ""
                 if feed_image:
                     image_url = feed_image
@@ -366,9 +429,9 @@ def main():
                     else:
                         image_url = list(article.images)[0]
                 
-                # Fallback to a generic stock photo if no image was found
+                # If no image found, search for a relevant one based on article title
                 if not image_url:
-                    image_url = FALLBACK_IMAGE_URL
+                    image_url = search_image_by_keywords(article.title)
                 
                 # Wrap non-Unsplash images with the global Cloudflare CDN-backed image proxy
                 # This compresses them to WebP, limits width to 1600px, bypasses hotlink blocks, and loads losslessly.
