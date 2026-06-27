@@ -191,6 +191,17 @@ def get_image_url_by_id(image_id):
         image_id = "photo-1505751172876-fa1923c5c528"
     return f"https://images.unsplash.com/{image_id}?w=1600&fm=webp&q=100&fit=crop"
 
+def build_search_url(category, keywords):
+    """Build a genuine search URL based on category and AI-generated keywords.
+    - 'tip' category -> Google Scholar (research papers)
+    - All other categories -> Google News (news articles)
+    """
+    encoded = urllib.parse.quote_plus(keywords)
+    if category == 'tip':
+        return f"https://scholar.google.com/scholar?q={encoded}"
+    else:
+        return f"https://news.google.com/search?q={encoded}"
+
 def select_relevant_image_for_article(model, title, summary):
     images_desc = "\n".join([f"- ID: {img_id} | Description: {desc}" for img_id, desc in AVAILABLE_IMAGES.items()])
     
@@ -250,10 +261,11 @@ def generate_fallback_article_for_category(model, category, recent_titles):
     
     Ensure the article generated is fresh and semantically distinct from everything in the list above.
 
-    Return ONLY a JSON object with exactly these three keys:
+    Return ONLY a JSON object with exactly these four keys:
     "title": a short catchy title string
     "summary": the 2 sentence summary string
     "image_id": the selected image ID from the list above
+    "search_keywords": 3 to 5 concise search keywords (space-separated) that someone would use to find real news articles or research papers about this exact topic on Google News or Google Scholar
     """
     try:
         response = model.generate_content(
@@ -266,14 +278,15 @@ def generate_fallback_article_for_category(model, category, recent_titles):
         title = str(data.get("title", "")).strip()
         summary = str(data.get("summary", "")).strip()
         image_id = str(data.get("image_id", "photo-1505751172876-fa1923c5c528")).strip()
+        search_keywords = str(data.get("search_keywords", "")).strip()
         
         if image_id not in AVAILABLE_IMAGES:
             image_id = "photo-1505751172876-fa1923c5c528"
             
-        return title, summary, image_id
+        return title, summary, image_id, search_keywords
     except Exception as e:
         print(f"Failed to generate fallback for {category}: {e}")
-        return "", "", "photo-1505751172876-fa1923c5c528"
+        return "", "", "photo-1505751172876-fa1923c5c528", ""
 
 # ==========================================
 # MAIN EXECUTION
@@ -538,7 +551,7 @@ def main():
             retries = 0
             while gap > 0 and retries < gap * 3:
                 retries += 1
-                title, summary, image_id = generate_fallback_article_for_category(model, cat, recent_titles)
+                title, summary, image_id, search_keywords = generate_fallback_article_for_category(model, cat, recent_titles)
                 if not title or not summary:
                     continue
                 
@@ -554,11 +567,15 @@ def main():
                 
                 image_url = get_image_url_by_id(image_id)
                 
+                # Build a genuine source URL from AI-generated search keywords
+                # Falls back to a Google News search of the title if no keywords were generated
+                fallback_link = build_search_url(cat, search_keywords if search_keywords else title)
+                
                 doc_data = {
                     'title': title,
                     'summary': summary,
                     'imageUrl': image_url,
-                    'readMoreLink': 'https://dashboard.pmjay.gov.in/', # General fallback link
+                    'readMoreLink': fallback_link,
                     'category': cat,
                     'isActive': True,
                     'createdAt': firestore.SERVER_TIMESTAMP
