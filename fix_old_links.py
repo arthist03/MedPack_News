@@ -1,10 +1,10 @@
 """
-One-time migration script to fix existing Firestore newsletters
-that still have 'https://dashboard.pmjay.gov.in/' as their readMoreLink.
+One-time migration script to DEACTIVATE fake/generated articles in Firestore.
 
-Replaces them with genuine search URLs:
-  - indian/global/startup -> Google News search
-  - tip -> Google Scholar search
+These are articles that were created by the old fallback system and have
+non-genuine links (dashboard.pmjay.gov.in, news.google.com/search, scholar.google.com/scholar).
+
+Sets isActive = false so they no longer appear in the app.
 
 Usage:
   Set FIREBASE_SERVICE_ACCOUNT_KEY env var, then run:
@@ -13,22 +13,16 @@ Usage:
 
 import os
 import json
-import urllib.parse
 import firebase_admin
 from firebase_admin import credentials, firestore
 
 
-def build_search_url(category, title):
-    """Build a genuine search URL from the article's title and category."""
-    # Clean the title: take first ~6 meaningful words for a focused search query
-    words = title.split()
-    query = " ".join(words[:6])
-    encoded = urllib.parse.quote_plus(query)
-    
-    if category == "tip":
-        return f"https://scholar.google.com/scholar?q={encoded}"
-    else:
-        return f"https://news.google.com/search?q={encoded}"
+# Links that indicate a fake/generated article (not a real scraped source)
+FAKE_LINK_PATTERNS = [
+    "https://dashboard.pmjay.gov.in/",
+    "https://news.google.com/search",
+    "https://scholar.google.com/scholar",
+]
 
 
 def main():
@@ -44,32 +38,29 @@ def main():
 
     newsletters_ref = db.collection("newsletters")
 
-    # Query all documents with the old hardcoded link
-    old_link = "https://dashboard.pmjay.gov.in/"
-    docs = newsletters_ref.where("readMoreLink", "==", old_link).get()
+    # Get ALL active newsletters
+    active_docs = newsletters_ref.where("isActive", "==", True).get()
 
-    print(f"Found {len(docs)} articles with the old dashboard link.\n")
+    print(f"Found {len(active_docs)} active articles. Checking for fake links...\n")
 
-    if len(docs) == 0:
-        print("Nothing to fix! All articles already have genuine links.")
-        return
-
-    updated = 0
-    for doc in docs:
+    deactivated = 0
+    for doc in active_docs:
         data = doc.to_dict()
-        title = data.get("title", "")
-        category = data.get("category", "indian")
+        link = data.get("readMoreLink", "")
+        title = data.get("title", "(no title)")
+        category = data.get("category", "?")
 
-        new_link = build_search_url(category, title)
+        # Check if this article has a fake/generated link
+        is_fake = any(link.startswith(pattern) for pattern in FAKE_LINK_PATTERNS)
 
-        print(f"  [{category.upper():>7}] {title}")
-        print(f"           -> {new_link}")
+        if is_fake:
+            print(f"  DEACTIVATING [{category:>7}] {title}")
+            print(f"               Link: {link}")
+            doc.reference.update({"isActive": False})
+            deactivated += 1
 
-        # Update the document
-        doc.reference.update({"readMoreLink": new_link})
-        updated += 1
-
-    print(f"\nDone! Updated {updated} articles with genuine source links.")
+    print(f"\nDone! Deactivated {deactivated} fake articles.")
+    print(f"Remaining active articles: {len(active_docs) - deactivated}")
 
 
 if __name__ == "__main__":

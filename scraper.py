@@ -14,18 +14,27 @@ import calendar
 # ==========================================
 # CONFIGURATION
 # ==========================================
-MIN_RATING_THRESHOLD = 8
+MIN_RATING_THRESHOLD = 6
 
 INDIAN_FEEDS = [
     'https://www.bing.com/news/search?q=Healthcare+News+India&format=rss',
     'https://www.bing.com/news/search?q=PMJAY+OR+Ayushman+Bharat&format=rss',
     'https://www.bing.com/news/search?q=Indian+Hospitals+Doctors&format=rss',
     'https://www.bing.com/news/search?q=Ministry+of+Health+India&format=rss',
+    'https://www.bing.com/news/search?q=AIIMS+Hospital+India+News&format=rss',
+    'https://www.bing.com/news/search?q=India+Public+Health+Policy&format=rss',
+    'https://www.bing.com/news/search?q=National+Health+Mission+India&format=rss',
+    'https://www.bing.com/news/search?q=Indian+Medical+Association+News&format=rss',
 ]
 
 GLOBAL_FEEDS = [
     'https://www.bing.com/news/search?q=Global+Healthcare+Innovation&format=rss',
     'https://www.bing.com/news/search?q=Healthcare+AI+Worldwide&format=rss',
+    'https://www.bing.com/news/search?q=WHO+Health+News&format=rss',
+    'https://www.bing.com/news/search?q=Global+Medical+Breakthrough&format=rss',
+    'https://www.bing.com/news/search?q=International+Hospital+News&format=rss',
+    'https://www.bing.com/news/search?q=CDC+Public+Health+Update&format=rss',
+    'https://www.bing.com/news/search?q=Global+Vaccine+Drug+Approval&format=rss',
 ]
 
 TECH_AND_STARTUP_FEEDS = [
@@ -40,6 +49,8 @@ TECH_AND_STARTUP_FEEDS = [
     'https://www.bing.com/news/search?q=3D+Bioprinting+Healthcare&format=rss',
     'https://www.bing.com/news/search?q=Blockchain+Healthcare+Security&format=rss',
     'https://www.bing.com/news/search?q=Healthcare+Research+Institutes&format=rss',
+    'https://www.bing.com/news/search?q=HealthTech+Funding+Investment&format=rss',
+    'https://www.bing.com/news/search?q=Digital+Health+Wearables+News&format=rss',
 ]
 
 RESEARCH_FEEDS = [
@@ -47,6 +58,12 @@ RESEARCH_FEEDS = [
     'https://jamanetwork.com/rss/journals/jama/mostread.xml',
     'https://connect.medrxiv.org/medrxiv_xml.php?subject=public_health',
     'https://connect.medrxiv.org/medrxiv_xml.php?subject=primary_care',
+    'https://www.bing.com/news/search?q=Health+Tips+Medical+Study+Findings&format=rss',
+    'https://www.bing.com/news/search?q=Diet+Nutrition+Health+Research&format=rss',
+    'https://www.bing.com/news/search?q=Exercise+Fitness+Health+Benefits+Study&format=rss',
+    'https://www.bing.com/news/search?q=Mental+Health+Wellness+Research&format=rss',
+    'https://www.bing.com/news/search?q=Medical+Research+Clinical+Trial+Results&format=rss',
+    'https://www.bing.com/news/search?q=Preventive+Healthcare+Tips+Study&format=rss',
 ]
 
 # ==========================================
@@ -133,160 +150,9 @@ def analyze_article_with_ai(model, title, text, default_category, recent_titles)
         return 0, "", default_category, False
 
 # ==========================================
-# FALLBACK GENERATOR (PLAN C)
+# STOCK IMAGE FALLBACK (for articles without images)
 # ==========================================
-AVAILABLE_IMAGES = {
-    # PMJAY / Schemes / Indian Gov
-    'photo-1576091160550-2173dba999ef': 'Doctor pointing to clinic dashboard / healthcare policy screen',
-    'photo-1537368910025-700350fe46c7': 'Group of Indian doctors / healthcare workers smiling',
-    'photo-1629909613654-28e377c37b09': 'Stethoscope resting on PMJAY/scheme policy documents',
-    'photo-1454165804606-c3d57bc86b40': 'Signing health insurance or medical scheme papers',
-    'photo-1554224155-8d04cb21cd6c': 'Medical billing, cost calculation, or healthcare financial papers',
-    
-    # Hospital / Clinical Interior
-    'photo-1586773860418-d3b3a998fc65': 'Modern clinic or hospital building entrance',
-    'photo-1519494026892-80bbd2d6fd0d': 'Bright hospital corridor with clinic rooms, healthcare interiors',
-    'photo-1587351021759-3e566b6af7cc': 'Hospital waiting lounge / clinic reception counter',
-    'photo-1516549655169-df83a0774514': 'Clinical lab testing, science research lab, syringes, blood tests',
-    
-    # Doctors & Nurses Consultations
-    'photo-1622253692010-333f2da6031d': 'Indian male doctor portrait with stethoscope, smiling',
-    'photo-1559839734-2b71ea197ec2': 'Female doctor consulting with patient in office',
-    'photo-1594824813573-246434de83fb': 'Female pediatrician or clinic doctor with clipboard',
-    'photo-1584515979956-d9f6e5d09982': 'Nurse in clinical scrubs checking hospital bed patient',
-    'photo-1576765608535-5f04d1e3f289': 'Home nurse caregiver assisting elderly patient',
-    'photo-1631815589968-fdb09a223b1e': 'Young female nurse or doctor portrait',
-    
-    # Medicine / Biotech / Surgery
-    'photo-1584017911766-d451b3d0e843': 'Spilled prescription capsules and medicine bottles',
-    'photo-1471864190281-a93a3070b6de': 'Pile of colored medical pills, tablets, and antibiotics',
-    'photo-1576602976047-174e57a47881': 'Pharmacy shop counters, chemist selling medicines',
-    'photo-1551601651-2a8555f1a136': 'Surgeons performing open heart or robotic surgery in operating theater',
-    'photo-1579684385127-1ef15d508118': 'Dentist checking teeth of patient, dental checkup clinic',
-    
-    # Healthy Diet / Lifestyle
-    'photo-1490645935967-10de6ba17061': 'Healthy eating salad plate with fresh avocado and seeds',
-    'photo-1512621776951-a57141f2eefd': 'Table with fresh fruits, greens, organic health diet',
-    'photo-1540420773420-3366772f4999': 'Healthy diet meal prep planning boxes',
-    'photo-1506126613408-eca07ce68773': 'Person practicing yoga meditation, stress relief, mental health wellness',
-    'photo-1544367567-0f2fcb009e0b': 'Stretching exercises, yoga routine, active healthy body',
-    
-    # Fitness / Exercise
-    'photo-1517838277536-f5f99be501cd': 'Sports running shoes, dumbbells, water, workout gear',
-    'photo-1476480862126-209bfaa8edc8': 'Jogging outdoors, cardio exercise, fitness training running',
-    'photo-1518611012118-696072aa579a': 'Fitness stretching class in health club',
-    
-    # AI / Digital Health
-    'photo-1507146426996-ef05306b995a': 'Abstract artificial intelligence brain tech node, grid, network',
-    'photo-1677442136019-21780efad99a': 'Robotic hands, cyborg, engineering AI in medicine',
-    'photo-1526374965328-7f61d4dc18c5': 'Abstract binary code, digital medical cloud database',
-    
-    # Generic Fallbacks
-    'photo-1505751172876-fa1923c5c528': 'Stethoscope on a notebook, general clinical research',
-    'photo-1527613426441-4da17471b66d': 'Medical staff holding hands in unity, clinic teamwork support'
-}
-
-def get_image_url_by_id(image_id):
-    if image_id not in AVAILABLE_IMAGES:
-        image_id = "photo-1505751172876-fa1923c5c528"
-    return f"https://images.unsplash.com/{image_id}?w=1600&fm=webp&q=100&fit=crop"
-
-def build_search_url(category, keywords):
-    """Build a genuine search URL based on category and AI-generated keywords.
-    - 'tip' category -> Google Scholar (research papers)
-    - All other categories -> Google News (news articles)
-    """
-    encoded = urllib.parse.quote_plus(keywords)
-    if category == 'tip':
-        return f"https://scholar.google.com/scholar?q={encoded}"
-    else:
-        return f"https://news.google.com/search?q={encoded}"
-
-def select_relevant_image_for_article(model, title, summary):
-    images_desc = "\n".join([f"- ID: {img_id} | Description: {desc}" for img_id, desc in AVAILABLE_IMAGES.items()])
-    
-    prompt = f"""
-    You are an expert healthcare editor. Review the following medical article:
-    Title: {title}
-    Summary: {summary}
-
-    Select the ID of the image from this list of premium healthcare and wellness photos that is most relevant to the subject of this article:
-    {images_desc}
-
-    Return ONLY a JSON object with exactly this one key:
-    "image_id": the selected image ID from the list
-    """
-    try:
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig(
-                response_mime_type="application/json",
-            )
-        )
-        data = json.loads(response.text)
-        image_id = str(data.get("image_id", "photo-1505751172876-fa1923c5c528")).strip()
-        if image_id not in AVAILABLE_IMAGES:
-            image_id = "photo-1505751172876-fa1923c5c528"
-        return image_id
-    except Exception as e:
-        print(f"Failed to select relevant image: {e}")
-        return "photo-1505751172876-fa1923c5c528"
-
-def generate_fallback_article_for_category(model, category, recent_titles):
-    if category == 'indian':
-        topic_desc = "a major Indian healthcare initiative, PMJAY / Ayushman Bharat / Maa Yojana benefit/policy update, public health project, or AIIMS/government hospital development in India."
-    elif category == 'global':
-        topic_desc = "a significant global medical trend, breakthrough clinical study, WHO healthcare update, or major international wellness policy."
-    elif category == 'startup':
-        topic_desc = "a medical technology innovation, a healthcare startup milestone, AI/ML application in diagnostics, robotic surgery advancements, or university/IIT health tech research."
-    else:  # 'tip'
-        topic_desc = "a crucial daily health, diet, wellness, preventative care, or medical tip for patients and doctors."
-
-    images_desc = "\n".join([f"- ID: {img_id} | Description: {desc}" for img_id, desc in AVAILABLE_IMAGES.items()])
-
-    prompt = f"""
-    You are an expert healthcare editor for a premium app used by doctors and patients in India (PMJAY, Maa Yojana, etc).
-    Generate a high-quality, engaging healthcare news snippet or educational article for the "{category}" category.
-    The article must cover: {topic_desc}
-
-    Make the title extremely catchy, short, and professional.
-    Write a highly engaging, professional 2-sentence summary/explanation of this topic.
-    
-    Review this list of available premium image options and select the ID of the image that is most relevant to the article you generated:
-    {images_desc}
-
-    CRITICAL DEDUPLICATION CHECK:
-    Do NOT generate any topic, event, or announcement that is a duplicate or covers the same news/tip as any of the titles in the following list:
-    {json.dumps(recent_titles)}
-    
-    Ensure the article generated is fresh and semantically distinct from everything in the list above.
-
-    Return ONLY a JSON object with exactly these four keys:
-    "title": a short catchy title string
-    "summary": the 2 sentence summary string
-    "image_id": the selected image ID from the list above
-    "search_keywords": 3 to 5 concise search keywords (space-separated) that someone would use to find real news articles or research papers about this exact topic on Google News or Google Scholar
-    """
-    try:
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig(
-                response_mime_type="application/json",
-            )
-        )
-        data = json.loads(response.text)
-        title = str(data.get("title", "")).strip()
-        summary = str(data.get("summary", "")).strip()
-        image_id = str(data.get("image_id", "photo-1505751172876-fa1923c5c528")).strip()
-        search_keywords = str(data.get("search_keywords", "")).strip()
-        
-        if image_id not in AVAILABLE_IMAGES:
-            image_id = "photo-1505751172876-fa1923c5c528"
-            
-        return title, summary, image_id, search_keywords
-    except Exception as e:
-        print(f"Failed to generate fallback for {category}: {e}")
-        return "", "", "photo-1505751172876-fa1923c5c528", ""
+FALLBACK_IMAGE_URL = "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=1600&fm=webp&q=100&fit=crop"
 
 # ==========================================
 # MAIN EXECUTION
@@ -413,8 +279,8 @@ def main():
     print(f"Found {len(article_links)} unique articles from the past 24 hours to process.")
     
     uploaded_by_category = { 'indian': 0, 'global': 0, 'startup': 0, 'tip': 0 }
-    TARGET_ARTICLES_PER_CATEGORY = 4
-    MAX_ARTICLES_PER_CATEGORY = 6
+    TARGET_ARTICLES_PER_CATEGORY = 10
+    MAX_ARTICLES_PER_CATEGORY = 10
     uploaded_count = 0
     
     # 2. Process articles
@@ -500,10 +366,9 @@ def main():
                     else:
                         image_url = list(article.images)[0]
                 
-                # Fallback to high-quality stock illustration if no image was found
+                # Fallback to a generic stock photo if no image was found
                 if not image_url:
-                    fallback_id = select_relevant_image_for_article(model, article.title, summary)
-                    image_url = get_image_url_by_id(fallback_id)
+                    image_url = FALLBACK_IMAGE_URL
                 
                 # Wrap non-Unsplash images with the global Cloudflare CDN-backed image proxy
                 # This compresses them to WebP, limits width to 1600px, bypasses hotlink blocks, and loads losslessly.
@@ -541,57 +406,12 @@ def main():
         # Small delay to respect rate limits
         time.sleep(2)
         
-    # 3. Fill gaps for categories that have fewer than 4 articles
-    print("\nChecking for category gaps (Target: at least 4 articles per category)...")
+    # Print final summary
+    print("\n" + "=" * 50)
+    print("FINAL RESULTS (only real scraped articles):")
     for cat in ['indian', 'global', 'startup', 'tip']:
-        current_count = uploaded_by_category[cat]
-        gap = TARGET_ARTICLES_PER_CATEGORY - current_count
-        if gap > 0:
-            print(f"Category '{cat}' only has {current_count} articles. Generating {gap} fallback articles...")
-            retries = 0
-            while gap > 0 and retries < gap * 3:
-                retries += 1
-                title, summary, image_id, search_keywords = generate_fallback_article_for_category(model, cat, recent_titles)
-                if not title or not summary:
-                    continue
-                
-                # Check duplicate title in Firestore
-                existing_title = newsletters_ref.where('title', '==', title).limit(1).get()
-                if len(existing_title) > 0:
-                    print(f"Skipping duplicate fallback title (exact firestore): {title}")
-                    continue
-                    
-                if title.strip() in recent_titles:
-                    print(f"Skipping duplicate fallback title (recent list): {title}")
-                    continue
-                
-                image_url = get_image_url_by_id(image_id)
-                
-                # Build a genuine source URL from AI-generated search keywords
-                # Falls back to a Google News search of the title if no keywords were generated
-                fallback_link = build_search_url(cat, search_keywords if search_keywords else title)
-                
-                doc_data = {
-                    'title': title,
-                    'summary': summary,
-                    'imageUrl': image_url,
-                    'readMoreLink': fallback_link,
-                    'category': cat,
-                    'isActive': True,
-                    'createdAt': firestore.SERVER_TIMESTAMP
-                }
-                
-                newsletters_ref.add(doc_data)
-                print(f"Uploaded fallback educational card for '{cat}': '{title}'")
-                uploaded_by_category[cat] += 1
-                uploaded_count += 1
-                recent_titles.append(title.strip())
-                gap -= 1
-                time.sleep(1)
-        else:
-            print(f"Category '{cat}' is fully satisfied with {current_count} articles.")
-            
-    print(f"[{datetime.now()}] Pipeline finished. Successfully uploaded {uploaded_count} premium articles.")
+        print(f"  {cat}: {uploaded_by_category[cat]} articles")
+    print(f"[{datetime.now()}] Pipeline finished. Successfully uploaded {uploaded_count} real articles.") 
 
 if __name__ == "__main__":
     main()
